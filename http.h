@@ -212,6 +212,7 @@ int http_get_info_packs(const char *base_url,
 const char *http_get_accept_language_header(void);
 
 struct http_pack_request {
+	/* Newly received PACK payload, excluding HTTP error bodies and resume offsets. */
 	void (*progress)(void *data, size_t bytes);
 	void *progress_data;
 	char *url;

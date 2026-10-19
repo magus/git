@@ -3036,17 +3036,17 @@ static size_t fwrite_http_pack(char *ptr, size_t size, size_t nmemb, void *data)
 {
 	struct http_pack_request *preq = data;
 	long code;
-	size_t written;
+	size_t bytes = st_mult(size, nmemb);
 
 	if (curl_easy_getinfo(preq->slot->curl, CURLINFO_HTTP_CODE, &code) != CURLE_OK)
 		return 0;
 	/* Error bodies must not overwrite a partial pack shared with another fetch. */
 	if (code >= 300)
-		return size * nmemb;
-	written = fwrite(ptr, 1, st_mult(size, nmemb), preq->packfile);
+		return bytes;
+	/* Count received PACK payload even if the local write fails. */
 	if (preq->progress)
-		preq->progress(preq->progress_data, written);
-	return written;
+		preq->progress(preq->progress_data, bytes);
+	return fwrite(ptr, 1, bytes, preq->packfile);
 }
 
 int run_http_pack_request(struct http_pack_request *preq)

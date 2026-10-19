@@ -1436,10 +1436,20 @@ fetch_pack () {
 		--index-pack-arg=index-pack --index-pack-arg=--stdin "$pack_url"
 }
 
+check_pack_received_bytes () {
+	grep "\"category\":\"http-fetch\".*\"key\":\"pack/received_bytes\"" pack-bytes.trace >pack-bytes-counts &&
+	tail -n 1 pack-bytes-counts >pack-bytes-last &&
+	test_grep "\"value\":\"$1\"" pack-bytes-last &&
+	test_grep "\"category\":\"http-fetch\".*\"key\":\"pack/received_bytes_complete\".*\"value\":\"1\"" pack-bytes.trace
+}
+
 test_expect_success 'resumed packfile download survives two transient errors' '
 	setup_pack_retry 503 502 200 &&
 	cp pack-prefix "pack-retry-client/.git/objects/pack/pack-$pack_hash.pack.temp" &&
-	fetch_pack &&
+	>pack-bytes.trace &&
+	GIT_TRACE2_EVENT="$TRASH_DIRECTORY/pack-bytes.trace" fetch_pack &&
+	size=$(wc -c <"$pack") &&
+	check_pack_received_bytes "$((size - 12))" &&
 	printf "GET|bytes=12-|\nGET|bytes=12-|\nGET|bytes=12-|\n" >expect &&
 	test_cmp expect "$HTTPD_ROOT_PATH/pack-retry.requests" &&
 	test_cmp "$pack" "pack-retry-client/.git/objects/pack/pack-$pack_hash.pack"
@@ -1452,7 +1462,9 @@ do
 		test_config_global http.maxRetries 3 &&
 		partial="pack-retry-client/.git/objects/pack/pack-$pack_hash.pack.temp" &&
 		cp pack-prefix "$partial" &&
-		fetch_pack test_must_fail &&
+		>pack-bytes.trace &&
+		GIT_TRACE2_EVENT="$TRASH_DIRECTORY/pack-bytes.trace" fetch_pack test_must_fail &&
+		check_pack_received_bytes 0 &&
 		test_cmp pack-prefix "$partial" &&
 		printf "GET|bytes=12-|\nGET|bytes=12-|\nGET|bytes=12-|\n" >expect &&
 		test_cmp expect "$HTTPD_ROOT_PATH/pack-retry.requests"
@@ -1470,7 +1482,9 @@ done
 
 test_expect_success 'an interrupted response is not retried or truncated' '
 	setup_pack_retry truncated 200 &&
-	fetch_pack test_must_fail &&
+	>pack-bytes.trace &&
+	GIT_TRACE2_EVENT="$TRASH_DIRECTORY/pack-bytes.trace" fetch_pack test_must_fail &&
+	check_pack_received_bytes 12 &&
 	test_line_count = 1 "$HTTPD_ROOT_PATH/pack-retry.requests" &&
 	test_cmp pack-prefix "pack-retry-client/.git/objects/pack/pack-$pack_hash.pack.temp"
 '
@@ -1525,11 +1539,16 @@ test_expect_success 'parallel packfile URI fetch completes after HTTP 503 and 42
 test_expect_success 'parallel URI progress respects quiet and no-progress' '
 	for option in --quiet --no-progress
 	do
+		>pack-bytes.trace &&
+		GIT_TRACE2_EVENT="$TRASH_DIRECTORY/pack-bytes.trace" \
 		GIT_TEST_SIDEBAND_ALL=1 \
 		git -c protocol.version=2 -c fetch.uriprotocols=http \
 			-c fetch.packfileUriJobs=2 clone "$option" \
 			"$HTTPD_URL/smart/http_parent" "http_child-$option" \
 			2>no-ref-progress &&
+		grep "\"category\":\"http-fetch\".*\"key\":\"pack/received_bytes_complete\".*\"value\":\"1\"" \
+			pack-bytes.trace >pack-bytes-complete &&
+		test_line_count = 3 pack-bytes-complete &&
 		test_grep ! -E "Fetching packs|Receiving objects|^bytes " no-ref-progress ||
 		return 1
 	done

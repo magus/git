@@ -56,7 +56,14 @@ static int fetch_using_walker(const char *raw_url, int get_verbosely,
 struct packfile_progress {
 	uint64_t bytes;
 	uint64_t last_update;
+	int report_progress;
 };
+
+static void trace_packfile_progress(struct packfile_progress *progress)
+{
+	trace2_data_intmax("http-fetch", the_repository,
+			  "pack/received_bytes", progress->bytes);
+}
 
 static void report_packfile_progress(struct packfile_progress *progress)
 {
@@ -71,8 +78,13 @@ static void update_packfile_progress(void *data, size_t bytes)
 	struct packfile_progress *progress = data;
 
 	progress->bytes += bytes;
-	if (getnanotime() - progress->last_update >= 500000000)
-		report_packfile_progress(progress);
+	if (getnanotime() - progress->last_update >= 500000000) {
+		trace_packfile_progress(progress);
+		if (progress->report_progress)
+			report_packfile_progress(progress);
+		else
+			progress->last_update = getnanotime();
+	}
 }
 
 static void fetch_single_packfile(struct object_id *packfile_hash,
@@ -81,9 +93,11 @@ static void fetch_single_packfile(struct object_id *packfile_hash,
 				  int report_progress)
 {
 	struct http_pack_request *preq;
-	struct packfile_progress progress = { 0 };
+	struct packfile_progress progress = { .report_progress = report_progress };
 	int ret;
 
+	progress.last_update = getnanotime();
+	trace_packfile_progress(&progress);
 	http_init(NULL, url, 0);
 
 	preq = new_direct_http_pack_request(packfile_hash->hash, xstrdup(url));
@@ -91,13 +105,14 @@ static void fetch_single_packfile(struct object_id *packfile_hash,
 		die("couldn't create http pack request");
 	preq->index_pack_args = index_pack_args;
 	preq->preserve_index_pack_stdout = 1;
-	if (report_progress) {
-		progress.last_update = getnanotime();
-		preq->progress = update_packfile_progress;
-		preq->progress_data = &progress;
-	}
+	preq->progress = update_packfile_progress;
+	preq->progress_data = &progress;
 
 	ret = run_http_pack_request(preq);
+	/* Preserve partial transfers before ordinary HTTP failures exit. */
+	trace_packfile_progress(&progress);
+	trace2_data_intmax("http-fetch", the_repository,
+			  "pack/received_bytes_complete", 1);
 	if (ret != HTTP_START_FAILED) {
 		if (ret != HTTP_OK) {
 			struct url_info url;

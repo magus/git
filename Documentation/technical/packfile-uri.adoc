@@ -70,6 +70,20 @@ fail without retrying. Interrupted pack transfers are not retried.
 HTTP 429 uses `http.maxRetries`, `http.retryAfter`, and `http.maxRetryTime`
 (disabled by default).
 
+Each `http-fetch` process emits Trace2 `data` events in category `http-fetch`
+with key `pack/received_bytes`. This is a cumulative count of PACK response
+payload received during this invocation, starting at zero. It excludes an
+existing partial file, HTTP error bodies, headers, and local indexing reads.
+Bytes count when received, even if writing them to disk fails. Retries do not
+reset the count. Quiet and serial downloads emit the same measurements.
+
+Snapshots are emitted during transfer no more often than twice per second.
+When the HTTP operation returns, including on failure, a final snapshot precedes
+`pack/received_bytes_complete=1`. Completion describes the measurement, not
+download success. If a process is killed before that marker, the last snapshot
+is only a lower bound. Consumers should take the last count per process, not
+sum its snapshots. These events contain no URL or credentials.
+
 When the client downloads the given URIs, it should store them with "keep"
 files, just like it does with the packfile in the `packfile` section. These
 additional "keep" files can only be removed after the refs have been updated -
