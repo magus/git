@@ -22,6 +22,7 @@
 	topic = refs/heads/tb/codex/incremental-midx
 	topic = refs/heads/tb/codex/debian12-http2-auth
 	topic = refs/heads/tn/codex/http-pack-transient-retry
+	topic = refs/heads/tb/codex/skipping-parse-parents
 
 [branch "tb/codex/automation"]
 	remote = .
@@ -162,3 +163,10 @@
 	source-tip = 540401f2f3be07bfa4c9cf32ec99c8cad7e5bcd1
 	source-base = bd3090bbf2e02e230c4a816288512eab27cb289f
 	merge = refs/heads/af/codex/packfile-uri-credentials
+
+[branch "tb/codex/skipping-parse-parents"]
+	remote = .
+	source-ref = refs/heads/tb/codex/skipping-parse-parents
+	source-tip = 26837783273da646dc9e0cfc9cfec43cf1196fe5
+	source-base = b8242b093d9e941a34460d715e3ce616a34ac3fe
+	merge = refs/heads/master
