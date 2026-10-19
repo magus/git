@@ -24,6 +24,7 @@
 	topic = refs/heads/tn/codex/http-pack-transient-retry
 	topic = refs/heads/tb/codex/skipping-parse-parents
 	topic = refs/heads/af/codex/webdav-redirect-credentials
+	topic = refs/heads/dr/codex/reuse-packfile-uri
 
 [branch "tb/codex/automation"]
 	remote = .
@@ -178,3 +179,10 @@
 	source-tip = 0ad3526206bbe3c820e9aced7832c6d3e2c9e7ac
 	source-base = b81ca645fdf0bf70789691823f9d7a4abbb05697
 	merge = refs/heads/af/codex/http-auth-retry-redirect-v2
+
+[branch "dr/codex/reuse-packfile-uri"]
+	remote = .
+	source-ref = refs/heads/dr/codex/reuse-packfile-uri
+	source-tip = d5e2b6b47fd4acc9d013718e71fd6818d1f9ce72
+	source-base = 540401f2f3be07bfa4c9cf32ec99c8cad7e5bcd1
+	merge = refs/heads/tn/codex/http-pack-transient-retry
