@@ -63,6 +63,9 @@ test_expect_success 'run-command formats empty args properly' '
     test_must_fail env GIT_TRACE=1 git frotz a "" b " " c 2>actual.raw &&
     sed -ne "/run_command:/s/.*trace: run_command: //p" actual.raw >actual &&
     echo "git-frotz a '\'''\'' b '\'' '\'' c" >expect &&
+    test_cmp expect actual &&
+    test_must_fail env GIT_TRACE=1 OG_RESTORE_EXTERNAL_PATH=1 git frotz a "" b " " c 2>actual.raw &&
+    sed -ne "/run_command:/s/.*trace: run_command: //p" actual.raw >actual &&
     test_cmp expect actual
 '
 

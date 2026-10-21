@@ -1,6 +1,7 @@
 #define USE_THE_REPOSITORY_VARIABLE
 
 #include "builtin.h"
+#include "abspath.h"
 #include "config.h"
 #include "environment.h"
 #include "exec-cmd.h"
@@ -790,10 +791,35 @@ static void handle_builtin(struct strvec *args)
 	}
 }
 
+#ifndef GIT_WINDOWS_NATIVE
+static struct strvec external_command_env = STRVEC_INIT;
+static struct strbuf original_git_exec_path = STRBUF_INIT;
+
+static void prepare_external_command_env(void)
+{
+	const char *restore_path = getenv("OG_RESTORE_EXTERNAL_PATH");
+	int restore_requested = restore_path && !strcmp(restore_path, "1");
+
+	if (restore_requested) {
+		const char *path = getenv("PATH");
+
+		if (path)
+			strvec_pushf(&external_command_env, "PATH=%s", path);
+
+		/* Keep this one-use og marker out of all child processes. */
+		unsetenv("OG_RESTORE_EXTERNAL_PATH");
+	}
+}
+#endif
+
 static void execv_dashed_external(const char **argv)
 {
 	struct child_process cmd = CHILD_PROCESS_INIT;
 	int status;
+#ifndef GIT_WINDOWS_NATIVE
+	int may_restore_path = external_command_env.nr &&
+		!find_last_dir_sep(argv[0]);
+#endif
 
 	if (use_pager == -1 && !is_builtin(argv[0]))
 		use_pager = check_pager_config(the_repository, argv[0]);
@@ -801,6 +827,28 @@ static void execv_dashed_external(const char **argv)
 
 	strvec_pushf(&cmd.args, "git-%s", argv[0]);
 	strvec_pushv(&cmd.args, argv + 1);
+
+#ifndef GIT_WINDOWS_NATIVE
+	if (may_restore_path) {
+		struct strbuf git_program = STRBUF_INIT;
+		int is_external_program;
+
+		/*
+		 * run_command() resolves the executable before applying cmd.env.
+		 * Keep Git's program directory first for commands installed there.
+		 */
+		if (original_git_exec_path.len)
+			strbuf_addf(&git_program, "%s/git-%s",
+				    original_git_exec_path.buf, argv[0]);
+		is_external_program = (!git_program.len || !is_executable(git_program.buf)) &&
+			exists_in_PATH(cmd.args.v[0]);
+		if (is_external_program)
+			strvec_pushv(&cmd.env, external_command_env.v);
+
+		strbuf_release(&git_program);
+	}
+#endif
+
 	cmd.clean_on_exit = 1;
 	cmd.wait_after_clean = 1;
 	cmd.silent_exec_failure = 1;
@@ -925,6 +973,10 @@ int cmd_main(int argc, const char **argv)
 	const char *cmd;
 	int done_help = 0;
 
+#ifndef GIT_WINDOWS_NATIVE
+	prepare_external_command_env();
+#endif
+
 	cmd = argv[0];
 	if (!cmd)
 		cmd = "git-help";
@@ -981,6 +1033,15 @@ int cmd_main(int argc, const char **argv)
 	 * environment, and the $(gitexecdir) from the Makefile at build
 	 * time.
 	 */
+#ifndef GIT_WINDOWS_NATIVE
+	if (external_command_env.nr) {
+		const char *exec_path = git_exec_path();
+
+		/* An alias can change GIT_EXEC_PATH without rebuilding PATH. */
+		if (exec_path && *exec_path)
+			strbuf_add_absolute_path(&original_git_exec_path, exec_path);
+	}
+#endif
 	setup_path();
 
 	for (int i = 0; i < argc; i++)
