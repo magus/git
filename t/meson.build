@@ -112,6 +112,7 @@ integration_tests = [
   't0052-simple-ipc.sh',
   't0055-beyond-symlinks.sh',
   't0056-git-C.sh',
+  't0057-og-external-path.sh',
   't0060-path-utils.sh',
   't0061-run-command.sh',
   't0062-revision-walking.sh',
